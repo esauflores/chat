@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis Chat Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #chat-container {
+            background-color: white;
+            border: 1px solid #ccc;
+            width: 600px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #chat-box {
+            height: 300px;
+            overflow-y: scroll;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+        }
+        #chat-box p {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        #chat-box .own-message {
+            background-color: #d0f0c0;
+        }
+        #chat-box .other-message {
+            background-color: #e0e0e0;
+        }
+        #message-input {
+            width: calc(100% - 80px);
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #send-button {
+            width: 60px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        #nickname-input {
+            width: calc(100% - 80px);
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #join-button {
+            width: 60px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        #error-message {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="chat-container">
+    <div id="join-chat">
+        <input type="text" id="nickname-input" placeholder="Enter your nickname">
+        <button id="join-button">Join</button>
+        <div id="error-message"></div>
+    </div>
+
+    <div id="chat-section" style="display:none;">
+        <div id="chat-box"></div>
+        <input type="text" id="message-input" placeholder="Type your message here">
+        <button id="send-button">Send</button>
+    </div>
+</div>
+
+<script>
+    // const SERVER_URL = 'http://localhost:5000';
+    const SERVER_URL = 'http://10.237.19.17:5001';
+    let nickname = '';
+
+    const chatBox = document.getElementById('chat-box');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const nicknameInput = document.getElementById('nickname-input');
+    const joinButton = document.getElementById('join-button');
+    const chatSection = document.getElementById('chat-section');
+    const joinChatDiv = document.getElementById('join-chat');
+    const errorMessageDiv = document.getElementById('error-message');
+
+    let messages = [];
+
+    joinButton.addEventListener('click', async () => {
+        nickname = nicknameInput.value.trim();
+        if (!nickname.match(/^[a-zA-Z0-9]{1,20}$/)) {
+            errorMessageDiv.innerText = 'Invalid nickname. Must be alphanumeric and up to 20 characters.';
+            return;
+        }
+
+        const response = await fetch(`${SERVER_URL}/join-chat/${nickname}`);
+        const data = await response.json();
+
+        if (response.status === 200) {
+            errorMessageDiv.innerText = '';
+            joinChatDiv.style.display = 'none';
+            chatSection.style.display = 'block';
+            startPollingMessages();
+        } else if (data === 'already_in_use') {
+            errorMessageDiv.innerText = 'Nickname is already in use.';
+        } else if (data === 'invalid_nickname') {
+            errorMessageDiv.innerText = 'Invalid nickname.';
+        }
+    });
+
+    sendButton.addEventListener('click', async () => {
+        const message = messageInput.value.trim();
+        if (message === '') return;
+        
+
+        const response = await fetch(`${SERVER_URL}/send-message/${nickname}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message })
+        });
+
+        if (response.status === 200) {
+            addMessage(nickname, message, true);
+            messageInput.value = '';
+        }
+    });
+
+    async function startPollingMessages() {
+        setInterval(async () => {
+            const response = await fetch(`${SERVER_URL}/get-messages/${nickname}`);
+            if (response.status === 200) {
+                const newMessages = await response.json();
+                newMessages.forEach((msg) => {
+                    addMessage(msg.nickname, msg.message, false);
+                });
+            }
+        }, 5000);
+    }
+
+    function addMessage(senderNickname, message, isOwnMessage) {
+        const messageElement = document.createElement('p');
+        messageElement.innerText = `${senderNickname}: ${message}`;
+        messageElement.classList.add(isOwnMessage ? 'own-message' : 'other-message');
+        chatBox.appendChild(messageElement);
+        chatBox.scrollTop = chatBox.scrollHeight; // Auto scroll to bottom
+    }
+</script>
+
+</body>
+</html>
